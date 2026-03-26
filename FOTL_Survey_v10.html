@@ -1813,10 +1813,12 @@ function renderBrandAwareness() {
     aideData.forEach(function(pair) {
         var brand = pair[0];
         var aidedCount = pair[1];
-        var brandFunnel = funnel[brand] || {};
-        var multi = brandFunnel['Multi-buyer L12M'] || 0;
-        var single = brandFunnel['Single-buyer L12M'] || 0;
-        conversion[brand] = Math.round(((multi + single) / (aidedCount || 1)) * 100);
+        if (aidedCount > 0) {
+            var brandFunnel = funnel[brand] || {};
+            var multi = brandFunnel['Multi-buyer L12M'] || 0;
+            var single = brandFunnel['Single-buyer L12M'] || 0;
+            conversion[brand] = Math.round(((multi + single) / aidedCount) * 100);
+        }
     });
     createHorizontalBarChart('chart-conversion', conversion, '', FLATUI[3]);
     
@@ -1932,7 +1934,8 @@ function createStackedHorizontalChart(id, data, title, colors) {
                 datalabels: { display: false }
             },
             scales: {
-                x: { stacked: true, beginAtZero: true }
+                x: { stacked: true, beginAtZero: true },
+                y: { stacked: true }
             }
         }
     });
@@ -2397,81 +2400,231 @@ function renderQ34to43() {
 }
 
 function renderQ39Themes() {
-    // BUG FIX 5: Use actual data from DATA.q39
+    // BUG FIX 5: Render verbatim responses with brand tabs
     var container = document.getElementById('q39-content');
     container.innerHTML = '';
 
     var data = DATA.q39 || {};
-    var themes = data[Object.keys(data)[0]] || [];
+    var brands = Object.keys(data);
 
-    if (!themes || themes.length === 0) {
-        container.innerHTML = '<p style="color: var(--fg3); text-align: center;">No theme data available</p>';
+    if (brands.length === 0) {
+        container.innerHTML = '<p style="color: var(--fg3); text-align: center;">No response data available</p>';
         return;
     }
 
-    var maxCount = Math.max.apply(null, themes.map(function(t) { return t.count || 0; }));
-    themes.forEach(function(theme) {
-        var bar = document.createElement('div');
-        bar.className = 'theme-bar';
-        var pct = maxCount > 0 ? (theme.count / maxCount) * 100 : 0;
-        bar.innerHTML = '<div class="theme-bar-visual" style="width: ' + pct + '%"></div>' +
-            '<div class="theme-bar-label">' +
-            '<div class="theme-name">' + (theme.text || theme.label || '') + '</div>' +
-            '<div class="theme-stats">n=' + (theme.count || 0) + '</div></div>';
-        container.appendChild(bar);
+    // Create brand tabs
+    var tabsDiv = document.createElement('div');
+    tabsDiv.style.cssText = 'display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;';
+
+    var currentBrand = brands[0];
+    var contentDiv = document.createElement('div');
+    contentDiv.id = 'q39-verbatim-content';
+
+    brands.forEach(function(brand, idx) {
+        var tab = document.createElement('button');
+        tab.style.cssText = 'padding: 8px 16px; border: 1px solid var(--accent); background: ' +
+            (idx === 0 ? 'var(--accent)' : 'transparent') +
+            '; color: ' + (idx === 0 ? '#fff' : 'var(--accent)') +
+            '; cursor: pointer; border-radius: 4px; font-weight: 500;';
+        tab.textContent = brand;
+        tab.addEventListener('click', function() {
+            currentBrand = brand;
+            var allTabs = tabsDiv.querySelectorAll('button');
+            allTabs.forEach(function(t) {
+                t.style.background = 'transparent';
+                t.style.color = 'var(--accent)';
+            });
+            this.style.background = 'var(--accent)';
+            this.style.color = '#fff';
+            renderQ39VerbatimContent(contentDiv, brand, data[brand]);
+        });
+        tabsDiv.appendChild(tab);
     });
+
+    container.appendChild(tabsDiv);
+    container.appendChild(contentDiv);
+    renderQ39VerbatimContent(contentDiv, currentBrand, data[currentBrand]);
+}
+
+function renderQ39VerbatimContent(container, brand, responses) {
+    container.innerHTML = '';
+    var responses_array = responses || [];
+
+    if (!Array.isArray(responses_array) || responses_array.length === 0) {
+        container.innerHTML = '<p style="color: var(--fg3);">No responses for this brand</p>';
+        return;
+    }
+
+    var header = document.createElement('div');
+    header.style.cssText = 'margin-bottom: 12px; font-weight: 500; color: var(--fg1);';
+    header.textContent = 'Total responses: ' + responses_array.length;
+    container.appendChild(header);
+
+    var list = document.createElement('div');
+    list.style.cssText = 'max-height: 600px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;';
+
+    responses_array.forEach(function(response, idx) {
+        var item = document.createElement('div');
+        item.style.cssText = 'padding: 12px; background: var(--bg2); border-left: 3px solid var(--accent); font-size: 14px; color: var(--fg2);';
+        var text = String(response || '');
+        var truncated = text.length > 150 ? text.substring(0, 150) + '...' : text;
+        item.textContent = truncated;
+        list.appendChild(item);
+    });
+
+    container.appendChild(list);
 }
 
 function renderQ41Themes() {
-    // BUG FIX 5: Use actual data from DATA.q41
+    // BUG FIX 5: Render verbatim responses with brand tabs
     var container = document.getElementById('q41-content');
     container.innerHTML = '';
 
     var data = DATA.q41 || {};
-    var themes = data[Object.keys(data)[0]] || [];
+    var brands = Object.keys(data);
 
-    if (!themes || themes.length === 0) {
-        container.innerHTML = '<p style="color: var(--fg3); text-align: center;">No theme data available</p>';
+    if (brands.length === 0) {
+        container.innerHTML = '<p style="color: var(--fg3); text-align: center;">No response data available</p>';
         return;
     }
 
-    var maxCount = Math.max.apply(null, themes.map(function(t) { return t.count || 0; }));
-    themes.forEach(function(theme) {
-        var bar = document.createElement('div');
-        bar.className = 'theme-bar';
-        var pct = maxCount > 0 ? (theme.count / maxCount) * 100 : 0;
-        bar.innerHTML = '<div class="theme-bar-visual" style="width: ' + pct + '%"></div>' +
-            '<div class="theme-bar-label">' +
-            '<div class="theme-name">' + (theme.text || theme.label || '') + '</div>' +
-            '<div class="theme-stats">n=' + (theme.count || 0) + '</div></div>';
-        container.appendChild(bar);
+    // Create brand tabs
+    var tabsDiv = document.createElement('div');
+    tabsDiv.style.cssText = 'display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;';
+
+    var currentBrand = brands[0];
+    var contentDiv = document.createElement('div');
+    contentDiv.id = 'q41-verbatim-content';
+
+    brands.forEach(function(brand, idx) {
+        var tab = document.createElement('button');
+        tab.style.cssText = 'padding: 8px 16px; border: 1px solid var(--accent); background: ' +
+            (idx === 0 ? 'var(--accent)' : 'transparent') +
+            '; color: ' + (idx === 0 ? '#fff' : 'var(--accent)') +
+            '; cursor: pointer; border-radius: 4px; font-weight: 500;';
+        tab.textContent = brand;
+        tab.addEventListener('click', function() {
+            currentBrand = brand;
+            var allTabs = tabsDiv.querySelectorAll('button');
+            allTabs.forEach(function(t) {
+                t.style.background = 'transparent';
+                t.style.color = 'var(--accent)';
+            });
+            this.style.background = 'var(--accent)';
+            this.style.color = '#fff';
+            renderQ41VerbatimContent(contentDiv, brand, data[brand]);
+        });
+        tabsDiv.appendChild(tab);
     });
+
+    container.appendChild(tabsDiv);
+    container.appendChild(contentDiv);
+    renderQ41VerbatimContent(contentDiv, currentBrand, data[currentBrand]);
+}
+
+function renderQ41VerbatimContent(container, brand, responses) {
+    container.innerHTML = '';
+    var responses_array = responses || [];
+
+    if (!Array.isArray(responses_array) || responses_array.length === 0) {
+        container.innerHTML = '<p style="color: var(--fg3);">No responses for this brand</p>';
+        return;
+    }
+
+    var header = document.createElement('div');
+    header.style.cssText = 'margin-bottom: 12px; font-weight: 500; color: var(--fg1);';
+    header.textContent = 'Total responses: ' + responses_array.length;
+    container.appendChild(header);
+
+    var list = document.createElement('div');
+    list.style.cssText = 'max-height: 600px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;';
+
+    responses_array.forEach(function(response, idx) {
+        var item = document.createElement('div');
+        item.style.cssText = 'padding: 12px; background: var(--bg2); border-left: 3px solid var(--accent); font-size: 14px; color: var(--fg2);';
+        var text = String(response || '');
+        var truncated = text.length > 150 ? text.substring(0, 150) + '...' : text;
+        item.textContent = truncated;
+        list.appendChild(item);
+    });
+
+    container.appendChild(list);
 }
 
 function renderQ43Themes() {
-    // BUG FIX 5: Use actual data from DATA.q43
+    // BUG FIX 5: Render verbatim responses with brand tabs
     var container = document.getElementById('q43-content');
     container.innerHTML = '';
 
     var data = DATA.q43 || {};
-    var themes = data[Object.keys(data)[0]] || [];
+    var brands = Object.keys(data);
 
-    if (!themes || themes.length === 0) {
-        container.innerHTML = '<p style="color: var(--fg3); text-align: center;">No theme data available</p>';
+    if (brands.length === 0) {
+        container.innerHTML = '<p style="color: var(--fg3); text-align: center;">No response data available</p>';
         return;
     }
 
-    var maxCount = Math.max.apply(null, themes.map(function(t) { return t.count || 0; }));
-    themes.forEach(function(theme) {
-        var bar = document.createElement('div');
-        bar.className = 'theme-bar';
-        var pct = maxCount > 0 ? (theme.count / maxCount) * 100 : 0;
-        bar.innerHTML = '<div class="theme-bar-visual" style="width: ' + pct + '%"></div>' +
-            '<div class="theme-bar-label">' +
-            '<div class="theme-name">' + (theme.text || theme.label || '') + '</div>' +
-            '<div class="theme-stats">n=' + (theme.count || 0) + '</div></div>';
-        container.appendChild(bar);
+    // Create brand tabs
+    var tabsDiv = document.createElement('div');
+    tabsDiv.style.cssText = 'display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;';
+
+    var currentBrand = brands[0];
+    var contentDiv = document.createElement('div');
+    contentDiv.id = 'q43-verbatim-content';
+
+    brands.forEach(function(brand, idx) {
+        var tab = document.createElement('button');
+        tab.style.cssText = 'padding: 8px 16px; border: 1px solid var(--accent); background: ' +
+            (idx === 0 ? 'var(--accent)' : 'transparent') +
+            '; color: ' + (idx === 0 ? '#fff' : 'var(--accent)') +
+            '; cursor: pointer; border-radius: 4px; font-weight: 500;';
+        tab.textContent = brand;
+        tab.addEventListener('click', function() {
+            currentBrand = brand;
+            var allTabs = tabsDiv.querySelectorAll('button');
+            allTabs.forEach(function(t) {
+                t.style.background = 'transparent';
+                t.style.color = 'var(--accent)';
+            });
+            this.style.background = 'var(--accent)';
+            this.style.color = '#fff';
+            renderQ43VerbatimContent(contentDiv, brand, data[brand]);
+        });
+        tabsDiv.appendChild(tab);
     });
+
+    container.appendChild(tabsDiv);
+    container.appendChild(contentDiv);
+    renderQ43VerbatimContent(contentDiv, currentBrand, data[currentBrand]);
+}
+
+function renderQ43VerbatimContent(container, brand, responses) {
+    container.innerHTML = '';
+    var responses_array = responses || [];
+
+    if (!Array.isArray(responses_array) || responses_array.length === 0) {
+        container.innerHTML = '<p style="color: var(--fg3);">No responses for this brand</p>';
+        return;
+    }
+
+    var header = document.createElement('div');
+    header.style.cssText = 'margin-bottom: 12px; font-weight: 500; color: var(--fg1);';
+    header.textContent = 'Total responses: ' + responses_array.length;
+    container.appendChild(header);
+
+    var list = document.createElement('div');
+    list.style.cssText = 'max-height: 600px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;';
+
+    responses_array.forEach(function(response, idx) {
+        var item = document.createElement('div');
+        item.style.cssText = 'padding: 12px; background: var(--bg2); border-left: 3px solid var(--accent); font-size: 14px; color: var(--fg2);';
+        var text = String(response || '');
+        var truncated = text.length > 150 ? text.substring(0, 150) + '...' : text;
+        item.textContent = truncated;
+        list.appendChild(item);
+    });
+
+    container.appendChild(list);
 }
 
 function renderOverlapTool() {
