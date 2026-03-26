@@ -1597,7 +1597,7 @@ var Q_TEXT = {
     'chart-drivers': 'Q19: Purchase Factors'
 };
 
-var currentCategory = 'basics';
+var currentCategory = null;
 var chartInstances = {};
 var currentBrandSelection = {};
 
@@ -1658,6 +1658,13 @@ function renderSection(sectionId) {
     var sections = document.querySelectorAll('.section');
     sections.forEach(function(s) { s.classList.remove('active'); });
     document.getElementById('section-' + sectionId).classList.add('active');
+
+    // Check if a category is selected (except for executive summary)
+    if (sectionId !== 0 && !currentCategory) {
+        var container = document.getElementById('section-' + sectionId);
+        container.innerHTML = '<div style="padding: 40px; text-align: center; color: var(--fg3);"><p>Please select a category (Basics or Intimates) from the top navigation to view data.</p></div>';
+        return;
+    }
 
     switch(sectionId) {
         case 0:
@@ -1795,15 +1802,16 @@ function renderBrandAwareness() {
     
     var funnel = DATA.funnel || {};
     createFunnelChart(funnel);
-    
+
     var conversion = {};
-    for (var brand in aideData) {
+    aideData.forEach(function(pair) {
+        var brand = pair[0];
+        var aidedCount = pair[1];
         var brandFunnel = funnel[brand] || {};
         var multi = brandFunnel['Multi-buyer L12M'] || 0;
         var single = brandFunnel['Single-buyer L12M'] || 0;
-        var total = aideData[brand][1] || 1;
-        conversion[brand] = Math.round(((multi + single) / total) * 100);
-    }
+        conversion[brand] = Math.round(((multi + single) / (aidedCount || 1)) * 100);
+    });
     createHorizontalBarChart('chart-conversion', conversion, '', FLATUI[3]);
     
     renderOpenText();
@@ -1830,7 +1838,7 @@ function createHorizontalBarChart(id, data, title, color) {
     var labels = sorted.map(function(p) { return p[0]; });
     var values = sorted.map(function(p) { return p[1]; });
     var colors = Array.isArray(color) ? color : labels.map(function() { return color; });
-    
+
     var ctx = document.getElementById(id).getContext('2d');
     chartInstances[id] = new Chart(ctx, {
         type: 'bar',
@@ -1858,6 +1866,60 @@ function createHorizontalBarChart(id, data, title, color) {
             },
             scales: {
                 x: { beginAtZero: true, max: Math.max.apply(null, values) * 1.1 }
+            }
+        }
+    });
+}
+
+function createStackedHorizontalChart(id, data, title, colors) {
+    destroyChart(id);
+
+    // BUG FIX 3: Handle {brand: {response: count}} structure
+    var brands = Object.keys(data);
+    var allResponses = {};
+
+    brands.forEach(function(brand) {
+        var responses = data[brand] || {};
+        for (var response in responses) {
+            if (responses.hasOwnProperty(response)) {
+                allResponses[response] = true;
+            }
+        }
+    });
+
+    var responseList = Object.keys(allResponses);
+    var datasets = [];
+
+    responseList.forEach(function(response, idx) {
+        var dataPoints = brands.map(function(brand) {
+            return (data[brand] && data[brand][response]) ? data[brand][response] : 0;
+        });
+
+        datasets.push({
+            label: response,
+            data: dataPoints,
+            backgroundColor: colors[idx % colors.length]
+        });
+    });
+
+    var ctx = document.getElementById(id).getContext('2d');
+    chartInstances[id] = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: brands,
+            datasets: datasets
+        },
+        options: {
+            indexAxis: 'y',
+            stacked: true,
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'bottom' },
+                datalabels: { display: false }
+            },
+            scales: {
+                x: { stacked: true, beginAtZero: true }
             }
         }
     });
@@ -1972,44 +2034,44 @@ function renderOpenText() {
 
 function renderCategoryEngagement() {
     var suffix = '_' + currentCategory;
-    
-    var q13 = DATA['q13' + suffix] || {};
-    var q44 = DATA['q44' + suffix] || {};
-    var q25 = DATA['q25' + suffix] || {};
-    var q20 = DATA['q20' + suffix] || {};
-    var q22 = DATA['q22' + suffix] || {};
-    var q23 = DATA['q23' + suffix] || {};
+
+    // BUG FIX 1: Use correct data keys
+    var items = DATA['items' + suffix] || {};
+    var discovery = DATA['discovery' + suffix] || {};
+    var promotions = DATA['promotions' + suffix] || {};
+    var channels = DATA['channels' + suffix] || {};
+    var online_reasons = DATA['online_reasons' + suffix] || {};
+    var instore_reasons = DATA['instore_reasons' + suffix] || {};
     var q14 = DATA['q14' + suffix] || {};
     var q24 = DATA['q24' + suffix] || {};
     var q17 = DATA['q17' + suffix] || {};
     var q18 = DATA['q18' + suffix] || {};
     var q15 = DATA['q15' + suffix] || {};
     var q28 = DATA['q28' + suffix] || {};
-    var q26a = DATA['q26a' + suffix] || {};
-    var q26b = DATA['q26b' + suffix] || {};
-    
-    createHorizontalBarChart('chart-q13', q13, '', FLATUI[0]);
-    createHorizontalBarChart('chart-q44', q44, '', FLATUI[1]);
-    createHorizontalBarChart('chart-q25', q25, '', FLATUI[2]);
-    
-    var q20Colors = {};
-    for (var key in q20) {
-        q20Colors[key] = (key.toLowerCase().includes('online')) ? FLATUI[3] : FLATUI[4];
+    var q26 = DATA['q26' + suffix] || {};
+
+    createHorizontalBarChart('chart-q13', items, '', FLATUI[0]);
+    createHorizontalBarChart('chart-q44', discovery, '', FLATUI[1]);
+    createHorizontalBarChart('chart-q25', promotions, '', FLATUI[2]);
+
+    var channelsColors = {};
+    for (var key in channels) {
+        channelsColors[key] = (key.toLowerCase().includes('online')) ? FLATUI[3] : FLATUI[4];
     }
-    createHorizontalBarChart('chart-q20', q20, '', q20Colors);
-    createHorizontalBarChart('chart-q22', q22, '', FLATUI[3]);
-    createHorizontalBarChart('chart-q23', q23, '', FLATUI[4]);
-    
+    createHorizontalBarChart('chart-q20', channels, '', channelsColors);
+    createHorizontalBarChart('chart-q22', online_reasons, '', FLATUI[3]);
+    createHorizontalBarChart('chart-q23', instore_reasons, '', FLATUI[4]);
+
     createHorizontalBarChart('chart-q14', q14, '', FLATUI[5]);
     createHorizontalBarChart('chart-q24', q24, '', FLATUI[6]);
     createHorizontalBarChart('chart-q17', q17, '', FLATUI[7]);
-    
+
     createDoughnutChart('chart-q18', q18, '', FLATUI);
     createDoughnutChart('chart-q15', q15, '', FLATUI);
     createDoughnutChart('chart-q28', q28, '', FLATUI);
-    
-    createHorizontalBarChart('chart-q26a', q26a, '', FLATUI[8]);
-    createHorizontalBarChart('chart-q26b', q26b, '', FLATUI[9]);
+
+    // BUG FIX 1: Use single q26 instead of q26a and q26b
+    createHorizontalBarChart('chart-q26a', q26, '', FLATUI[8]);
 }
 
 function renderBrandDeepDive() {
@@ -2205,31 +2267,60 @@ function renderNPSVerbatims(brands) {
     });
     
     renderVerbatimContent(brands[0]);
-    
-    var proms = 0, pass = 0, dets = 0;
+
+    // BUG FIX 4: Use _pct fields and calculate passives
+    var promoters_total = 0, passives_total = 0, detractors_total = 0;
     brands.forEach(function(b) {
         var bn = nps[b] || {};
-        proms += bn.promoters || 0;
-        pass += bn.passives || 0;
-        dets += bn.detractors || 0;
+        var promoters_pct = bn.promoters_pct || 0;
+        var detractors_pct = bn.detractors_pct || 0;
+        var passives_pct = 100 - promoters_pct - detractors_pct;
+
+        promoters_total += promoters_pct;
+        passives_total += passives_pct;
+        detractors_total += detractors_pct;
     });
-    
+
+    var brandCount = brands.length || 1;
+    promoters_total = Math.round(promoters_total / brandCount);
+    passives_total = Math.round(passives_total / brandCount);
+    detractors_total = Math.round(detractors_total / brandCount);
+
     var ctx = document.getElementById('chart-nps-breakdown').getContext('2d');
     chartInstances['chart-nps-breakdown'] = new Chart(ctx, {
         type: 'bar',
         data: {
-            labels: ['Promoters', 'Passives', 'Detractors'],
-            datasets: [{
-                label: 'Count',
-                data: [proms, pass, dets],
-                backgroundColor: ['#2ecc71', '#f39c12', '#e74c3c']
-            }]
+            labels: brands,
+            datasets: [
+                {
+                    label: 'Promoters',
+                    data: brands.map(function(b) { return nps[b] && nps[b].promoters_pct ? nps[b].promoters_pct : 0; }),
+                    backgroundColor: '#2ecc71'
+                },
+                {
+                    label: 'Passives',
+                    data: brands.map(function(b) {
+                        var bn = nps[b] || {};
+                        var promoters_pct = bn.promoters_pct || 0;
+                        var detractors_pct = bn.detractors_pct || 0;
+                        return 100 - promoters_pct - detractors_pct;
+                    }),
+                    backgroundColor: '#f39c12'
+                },
+                {
+                    label: 'Detractors',
+                    data: brands.map(function(b) { return nps[b] && nps[b].detractors_pct ? nps[b].detractors_pct : 0; }),
+                    backgroundColor: '#e74c3c'
+                }
+            ]
         },
         options: {
             indexAxis: 'y',
+            stacked: true,
             responsive: true,
             maintainAspectRatio: false,
-            plugins: { legend: { display: false }, datalabels: { anchor: 'end', align: 'right' } }
+            plugins: { legend: { position: 'bottom' }, datalabels: { display: false } },
+            scales: { x: { stacked: true, beginAtZero: true, max: 100 } }
         }
     });
 }
@@ -2254,8 +2345,7 @@ function renderVerbatimContent(brand) {
 }
 
 function renderQ34to43() {
-    var suffix = currentCategory === 'basics' ? '_basics' : '_intimates';
-    
+    // BUG FIX 3: Handle nested {brand: {response: count}} data structure
     var q34 = DATA['q34'] || {};
     var q35 = DATA['q35'] || {};
     var q36 = DATA['q36'] || {};
@@ -2263,33 +2353,112 @@ function renderQ34to43() {
     var q38 = DATA['q38'] || {};
     var q40 = DATA['q40'] || {};
     var q42 = DATA['q42'] || {};
-    
-    createHorizontalBarChart('chart-q34', q34, '', FLATUI[0]);
-    createHorizontalBarChart('chart-q35', q35, '', FLATUI[1]);
-    createHorizontalBarChart('chart-q36', q36, '', FLATUI[2]);
-    createDoughnutChart('chart-q37', q37, '', FLATUI);
-    createDoughnutChart('chart-q38', q38, '', FLATUI);
-    createHorizontalBarChart('chart-q40', q40, '', FLATUI[3]);
-    createHorizontalBarChart('chart-q42', q42, '', FLATUI[4]);
-    
+
+    // Create stacked bar charts for Q34-Q36, Q40, Q42 (aggregated by brand)
+    createStackedHorizontalChart('chart-q34', q34, '', FLATUI);
+    createStackedHorizontalChart('chart-q35', q35, '', FLATUI);
+    createStackedHorizontalChart('chart-q36', q36, '', FLATUI);
+
+    // Create donut charts for Q37-Q38 using first selected brand's data
+    var selectedBrands = Object.keys(currentBrandSelection).filter(function(b) { return currentBrandSelection[b]; });
+    var firstBrand = selectedBrands.length > 0 ? selectedBrands[0] : Object.keys(q37)[0];
+
+    if (q37[firstBrand]) {
+        createDoughnutChart('chart-q37', q37[firstBrand], '', FLATUI);
+    } else {
+        destroyChart('chart-q37');
+    }
+
+    if (q38[firstBrand]) {
+        createDoughnutChart('chart-q38', q38[firstBrand], '', FLATUI);
+    } else {
+        destroyChart('chart-q38');
+    }
+
+    createStackedHorizontalChart('chart-q40', q40, '', FLATUI);
+    createStackedHorizontalChart('chart-q42', q42, '', FLATUI);
+
     renderQ39Themes();
     renderQ41Themes();
     renderQ43Themes();
 }
 
 function renderQ39Themes() {
+    // BUG FIX 5: Use actual data from DATA.q39
     var container = document.getElementById('q39-content');
-    container.innerHTML = '<p style="color: var(--fg3); text-align: center;">Sample theme analysis: Why some shoppers don\'t purchase for themselves</p>';
+    container.innerHTML = '';
+
+    var data = DATA.q39 || {};
+    var themes = data[Object.keys(data)[0]] || [];
+
+    if (!themes || themes.length === 0) {
+        container.innerHTML = '<p style="color: var(--fg3); text-align: center;">No theme data available</p>';
+        return;
+    }
+
+    var maxCount = Math.max.apply(null, themes.map(function(t) { return t.count || 0; }));
+    themes.forEach(function(theme) {
+        var bar = document.createElement('div');
+        bar.className = 'theme-bar';
+        var pct = maxCount > 0 ? (theme.count / maxCount) * 100 : 0;
+        bar.innerHTML = '<div class="theme-bar-visual" style="width: ' + pct + '%"></div>' +
+            '<div class="theme-bar-label">' +
+            '<div class="theme-name">' + (theme.text || theme.label || '') + '</div>' +
+            '<div class="theme-stats">n=' + (theme.count || 0) + '</div></div>';
+        container.appendChild(bar);
+    });
 }
 
 function renderQ41Themes() {
+    // BUG FIX 5: Use actual data from DATA.q41
     var container = document.getElementById('q41-content');
-    container.innerHTML = '<p style="color: var(--fg3); text-align: center;">Rationalization themes for Q40 ratings (Product Offering vs Competitors)</p>';
+    container.innerHTML = '';
+
+    var data = DATA.q41 || {};
+    var themes = data[Object.keys(data)[0]] || [];
+
+    if (!themes || themes.length === 0) {
+        container.innerHTML = '<p style="color: var(--fg3); text-align: center;">No theme data available</p>';
+        return;
+    }
+
+    var maxCount = Math.max.apply(null, themes.map(function(t) { return t.count || 0; }));
+    themes.forEach(function(theme) {
+        var bar = document.createElement('div');
+        bar.className = 'theme-bar';
+        var pct = maxCount > 0 ? (theme.count / maxCount) * 100 : 0;
+        bar.innerHTML = '<div class="theme-bar-visual" style="width: ' + pct + '%"></div>' +
+            '<div class="theme-bar-label">' +
+            '<div class="theme-name">' + (theme.text || theme.label || '') + '</div>' +
+            '<div class="theme-stats">n=' + (theme.count || 0) + '</div></div>';
+        container.appendChild(bar);
+    });
 }
 
 function renderQ43Themes() {
+    // BUG FIX 5: Use actual data from DATA.q43
     var container = document.getElementById('q43-content');
-    container.innerHTML = '<p style="color: var(--fg3); text-align: center;">Rationalization themes for Q42 ratings (Quality vs Competitors)</p>';
+    container.innerHTML = '';
+
+    var data = DATA.q43 || {};
+    var themes = data[Object.keys(data)[0]] || [];
+
+    if (!themes || themes.length === 0) {
+        container.innerHTML = '<p style="color: var(--fg3); text-align: center;">No theme data available</p>';
+        return;
+    }
+
+    var maxCount = Math.max.apply(null, themes.map(function(t) { return t.count || 0; }));
+    themes.forEach(function(theme) {
+        var bar = document.createElement('div');
+        bar.className = 'theme-bar';
+        var pct = maxCount > 0 ? (theme.count / maxCount) * 100 : 0;
+        bar.innerHTML = '<div class="theme-bar-visual" style="width: ' + pct + '%"></div>' +
+            '<div class="theme-bar-label">' +
+            '<div class="theme-name">' + (theme.text || theme.label || '') + '</div>' +
+            '<div class="theme-stats">n=' + (theme.count || 0) + '</div></div>';
+        container.appendChild(bar);
+    });
 }
 
 function renderOverlapTool() {
@@ -2324,33 +2493,64 @@ function renderOverlapTool() {
 }
 
 function updateOverlapResults() {
+    // BUG FIX 7: Use actual bitmask data instead of Math.random()
     var primary = document.getElementById('overlap-primary').value;
     var frequency = document.getElementById('overlap-frequency').value;
     var selected = [];
-    
+
     document.querySelectorAll('#overlap-brands-selector .chip.active').forEach(function(chip) {
         selected.push(chip.textContent);
     });
-    
+
     var results = document.getElementById('overlap-results');
     results.innerHTML = '';
-    
+
     if (!primary) {
         results.innerHTML = '<p style="color: var(--fg3); text-align: center;">Select a primary brand to see overlap results</p>';
         return;
     }
-    
+
+    var bitmasks = DATA.overlap_bitmasks || {};
+    var buyerCounts = DATA.overlap_buyer_counts || {};
+    var brands = DATA.overlap_brands || [];
+
+    var primaryIdx = brands.indexOf(primary);
+    if (primaryIdx === -1) {
+        results.innerHTML = '<p style="color: var(--fg3); text-align: center;">Primary brand not found</p>';
+        return;
+    }
+
+    var primaryBuyers = buyerCounts[primary] || 0;
+
     selected.forEach(function(brand) {
         var row = document.createElement('div');
         row.className = 'overlap-result-row';
-        var pct = Math.round(Math.random() * 100);
-        
+
+        var secondaryIdx = brands.indexOf(brand);
+        if (secondaryIdx === -1) return;
+
+        // Calculate overlap: count brands that have both primary and secondary bits set
+        var overlapCount = 0;
+        var bitmaskArray = bitmasks[primary] || [];
+        var secondaryBitmasks = bitmasks[brand] || [];
+
+        if (Array.isArray(bitmaskArray) && Array.isArray(secondaryBitmasks)) {
+            // Simple intersection count if bitmasks are arrays
+            for (var i = 0; i < Math.min(bitmaskArray.length, secondaryBitmasks.length); i++) {
+                if (bitmaskArray[i] && secondaryBitmasks[i]) {
+                    overlapCount++;
+                }
+            }
+        }
+
+        var pct = primaryBuyers > 0 ? Math.round((overlapCount / primaryBuyers) * 100) : 0;
+
         row.innerHTML = '<div class="overlap-result-label">' + brand + '</div>' +
             '<div class="overlap-result-bar">' +
             '<div class="overlap-result-fill" style="width: ' + pct + '%">' +
             '<span class="overlap-result-value">' + pct + '%</span>' +
             '</div></div>';
-        
+
         results.appendChild(row);
     });
 }
