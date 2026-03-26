@@ -962,7 +962,7 @@
                             <div class="demo-panel" id="demo-chart-tom"></div>
                         </div>
                     </div>
-                    <div class="row-2">
+                    <div style="margin-bottom:20px;">
                         <div class="chart-card">
                             <div class="chart-header">
                                 <div>
@@ -979,23 +979,7 @@
                             </div>
                             <div class="demo-panel" id="demo-chart-funnel"></div>
                         </div>
-                        <div class="chart-card">
-                            <div class="chart-header">
-                                <div>
-                                    <div class="chart-title">Q9: Conversion Rate</div>
-                                    <div class="chart-subtitle">% Purchased in L12M of those Aware</div>
-                                </div>
-                                <div class="chart-controls">
-                                    <button class="btn btn-small toggle-percent" data-chart="chart-conversion">%</button>
-                                    <button class="btn btn-small active toggle-labels" data-chart="chart-conversion">Labels</button>
-                                    <button class="btn btn-small toggle-demo" data-chart="chart-conversion">Demo</button>
-                                </div>
-                            </div>
-                            <div class="chart-container-wrapper">
-                                <canvas id="chart-conversion"></canvas>
-                            </div>
-                            <div class="demo-panel" id="demo-chart-conversion"></div>
-                        </div>
+
                     </div>
                     <div class="section-content">
                         <h2 style="font-size: 16px; font-weight: 700; color: var(--fg); margin-bottom: 15px;">Discovery & Barriers</h2>
@@ -1505,6 +1489,7 @@
                                         <option value="l12m">L12M Buyers</option>
                                         <option value="any">Any time buyers (incl. lapsed)</option>
                                         <option value="multi">Multi-Buyer</option>
+                                        <option value="lapsed">Lapsed (purchased, not L12M)</option>
                                     </select>
                                 </div>
                                 <div class="overlap-control-row">
@@ -1517,6 +1502,7 @@
                                         <option value="l12m">L12M Buyers</option>
                                         <option value="any">Any time buyers (incl. lapsed)</option>
                                         <option value="multi">Multi-Buyer</option>
+                                        <option value="lapsed">Lapsed (purchased, not L12M)</option>
                                     </select>
                                 </div>
                             </div>
@@ -1830,7 +1816,8 @@ function buildDemoHeatmap(container, demoData, dim) {
         var rebucketed = {};
         responses.forEach(function(resp) {
             rebucketed[resp] = {};
-            genCols.forEach(function(gc) { rebucketed[resp][gc] = 0; });
+            var genSum = {}, genCount = {};
+            genCols.forEach(function(gc) { genSum[gc] = 0; genCount[gc] = 0; });
             var vals = demoData[resp];
             for (var ageStr in vals) {
                 var age = parseInt(ageStr);
@@ -1838,10 +1825,14 @@ function buildDemoHeatmap(container, demoData, dim) {
                 genCols.forEach(function(gc) {
                     var range = GEN_RANGES[gc];
                     if (age >= range[0] && age <= range[1]) {
-                        rebucketed[resp][gc] = Math.max(rebucketed[resp][gc], vals[ageStr]);
+                        genSum[gc] += vals[ageStr];
+                        genCount[gc]++;
                     }
                 });
             }
+            genCols.forEach(function(gc) {
+                rebucketed[resp][gc] = genCount[gc] > 0 ? Math.round(genSum[gc] / genCount[gc] * 10) / 10 : 0;
+            });
         });
         // Use rebucketed data
         var table = '<table class="q-heatmap"><thead><tr><th>Response</th><th>Total</th>';
@@ -1849,11 +1840,20 @@ function buildDemoHeatmap(container, demoData, dim) {
         table += '</tr></thead><tbody>';
         responses.forEach(function(resp) {
             table += '<tr><td style="font-weight:600;">' + resp + '</td>';
-            // Total col: average across demo
+            // Total col: use actual aided/unaided data percentage
             var origVals = demoData[resp];
-            var origTotal = 0, origCount = 0;
-            for (var k in origVals) { origTotal += origVals[k]; origCount++; }
-            var totalPct = origCount > 0 ? Math.round(origTotal / origCount * 10) / 10 : 0;
+            var mainDataKey = 'aided_' + currentCategory;
+            var mainData = DATA[mainDataKey] || {};
+            var n = getCurrentN();
+            var totalPct = 0;
+            if (mainData[resp] && n > 0) {
+                totalPct = Math.round((mainData[resp] / n) * 1000) / 10;
+            } else {
+                // Fallback: weighted average using count of ages per bucket
+                var wSum = 0, wCount = 0;
+                for (var k in origVals) { wSum += origVals[k]; wCount++; }
+                totalPct = wCount > 0 ? Math.round(wSum / wCount * 10) / 10 : 0;
+            }
             table += '<td style="font-weight:700;">' + totalPct + '%</td>';
             cols.forEach(function(col) {
                 var val = rebucketed[resp][col] || 0;
@@ -1880,9 +1880,17 @@ function buildDemoHeatmap(container, demoData, dim) {
     responses.forEach(function(resp) {
         table += '<tr><td style="font-weight:600;">' + resp + '</td>';
         var vals = demoData[resp] || {};
-        var total = 0, count = 0;
-        for (var k in vals) { total += vals[k]; count++; }
-        var totalPct = count > 0 ? Math.round(total / count * 10) / 10 : 0;
+        var mainDataKey2 = 'aided_' + currentCategory;
+        var mainData2 = DATA[mainDataKey2] || {};
+        var n2 = getCurrentN();
+        var totalPct = 0;
+        if (mainData2[resp] && n2 > 0) {
+            totalPct = Math.round((mainData2[resp] / n2) * 1000) / 10;
+        } else {
+            var total = 0, count = 0;
+            for (var k in vals) { total += vals[k]; count++; }
+            totalPct = count > 0 ? Math.round(total / count * 10) / 10 : 0;
+        }
         table += '<td style="font-weight:700;">' + totalPct + '%</td>';
         cols.forEach(function(col) {
             var val = vals[col] || 0;
@@ -2058,18 +2066,7 @@ function renderBrandAwareness() {
     var funnel = DATA.funnel || {};
     createFunnelChart(funnel);
 
-    var conversion = {};
-    aideData.forEach(function(pair) {
-        var brand = pair[0];
-        var aidedCount = pair[1];
-        if (aidedCount > 0) {
-            var brandFunnel = funnel[brand] || {};
-            var multi = brandFunnel['Multi-buyer L12M'] || 0;
-            var single = brandFunnel['Single-buyer L12M'] || 0;
-            conversion[brand] = Math.round(((multi + single) / aidedCount) * 100);
-        }
-    });
-    createHorizontalBarChart('chart-conversion', conversion, '', BRAND_COLORS, true);
+
     
     renderOpenText();
 
@@ -2077,7 +2074,6 @@ function renderBrandAwareness() {
     setChartTitle('chart-aided', 'Aided Awareness', Q_TEXT['chart-aided']);
     setChartTitle('chart-unaided', 'Unaided Awareness', Q_TEXT['chart-unaided']);
     setChartTitle('chart-tom', 'Top of Mind', Q_TEXT['chart-tom']);
-    setChartTitle('chart-conversion', 'Conversion Rate', Q_TEXT['chart-conversion']);
 }
 
 function normalizeUnaided(data, aideList) {
@@ -2300,13 +2296,23 @@ function createFunnelChart(funnel) {
     var stages = FUNNEL_STAGES;
     var datasets = [];
 
-    stages.forEach(function(stage) {
-        var data = brands.map(function(brand) {
-            var total = 0;
-            stages.forEach(function(s) { total += funnel[brand][s] || 0; });
-            var val = funnel[brand][stage] || 0;
-            return total > 0 ? Math.round((val / total) * 100) : 0;
-        });
+    // Pre-compute exact percentages per brand with remainder distribution for 100% sum
+    var brandPcts = {};
+    brands.forEach(function(brand) {
+        var total = 0;
+        stages.forEach(function(s) { total += funnel[brand][s] || 0; });
+        if (total === 0) { brandPcts[brand] = stages.map(function() { return 0; }); return; }
+        var rawPcts = stages.map(function(s) { return ((funnel[brand][s] || 0) / total) * 100; });
+        var floored = rawPcts.map(function(p) { return Math.floor(p); });
+        var remainder = 100 - floored.reduce(function(a,b) { return a+b; }, 0);
+        var remainders = rawPcts.map(function(p, i) { return { idx: i, rem: p - floored[i] }; });
+        remainders.sort(function(a,b) { return b.rem - a.rem; });
+        for (var ri = 0; ri < remainder; ri++) { floored[remainders[ri].idx]++; }
+        brandPcts[brand] = floored;
+    });
+
+    stages.forEach(function(stage, stageIdx) {
+        var data = brands.map(function(brand) { return brandPcts[brand][stageIdx]; });
         datasets.push({ label: stage, data: data, backgroundColor: STAGE_COLORS[stage] });
     });
 
@@ -2913,6 +2919,11 @@ function renderQ34to43() {
     }
 
     updateBPBHeatmaps(window._bpbSelected || {});
+
+    // Render Q39, Q41, Q43 verbatim sections
+    renderQ39Themes();
+    renderQ41Themes();
+    renderQ43Themes();
 }
 
 function updateBPBHeatmaps(bpbSelected) {
@@ -3225,9 +3236,43 @@ function updateOverlapResults() {
         return;
     }
 
-    var primaryBuyers = (buyerCounts[primaryFreq] || {})[primary] || 0;
-    var primaryBitmaskArray = bitmasks[primaryFreq] || [];
-    var comparisonBitmaskArray = bitmasks[comparisonFreq] || [];
+    // Compute lapsed bitmask: purchased any time but NOT in L12M
+    function getLapsedBitmask(bitmasks) {
+        var anyArr = bitmasks['any'] || [];
+        var l12mArr = bitmasks['l12m'] || [];
+        var lapsed = [];
+        for (var li = 0; li < anyArr.length; li++) {
+            lapsed.push(anyArr[li] & ~(l12mArr[li] || 0));
+        }
+        return lapsed;
+    }
+    function getLapsedBuyerCount(bitmasks, brands, brand) {
+        var lapsedArr = getLapsedBitmask(bitmasks);
+        var idx = brands.indexOf(brand);
+        if (idx === -1) return 0;
+        var bit = 1 << idx;
+        var count = 0;
+        for (var li = 0; li < lapsedArr.length; li++) {
+            if (lapsedArr[li] & bit) count++;
+        }
+        return count;
+    }
+
+    var primaryBuyers;
+    var primaryBitmaskArray;
+    var comparisonBitmaskArray;
+    if (primaryFreq === 'lapsed') {
+        primaryBitmaskArray = getLapsedBitmask(bitmasks);
+        primaryBuyers = getLapsedBuyerCount(bitmasks, brands, primary);
+    } else {
+        primaryBuyers = (buyerCounts[primaryFreq] || {})[primary] || 0;
+        primaryBitmaskArray = bitmasks[primaryFreq] || [];
+    }
+    if (comparisonFreq === 'lapsed') {
+        comparisonBitmaskArray = getLapsedBitmask(bitmasks);
+    } else {
+        comparisonBitmaskArray = bitmasks[comparisonFreq] || [];
+    }
     var primaryBit = 1 << primaryIdx;
 
     // Header showing config
