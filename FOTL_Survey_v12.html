@@ -3128,20 +3128,94 @@ function renderThemeBars(container, analysis) {
 function renderVerbatimContent(brand) {
     var container = document.getElementById('nps-verbatims-container');
     container.innerHTML = '';
-    
+
     var verbatims = DATA.q30_verbatims && DATA.q30_verbatims[brand] ? DATA.q30_verbatims[brand] : [];
-    
-    verbatims.slice(0, 4).forEach(function(verb) {
+    if (!verbatims || verbatims.length === 0) {
+        container.innerHTML = '<p style="color:var(--fg3);">No verbatim responses for ' + brand + '</p>';
+        return;
+    }
+
+    var responses = verbatims.map(function(v) { return v.text || ''; });
+    var themeAnalysis = analyzeThemes(responses);
+
+    var promoters = verbatims.filter(function(v) { return v.score >= 9; });
+    var passives = verbatims.filter(function(v) { return v.score >= 7 && v.score < 9; });
+    var detractors = verbatims.filter(function(v) { return v.score < 7; });
+
+    var header = document.createElement('div');
+    header.style.cssText = 'margin-bottom:20px;';
+    header.innerHTML = '<div style="font-weight:700;font-size:16px;color:var(--fg);margin-bottom:8px;">' + brand + ' <span style="font-weight:400;font-size:13px;color:var(--fg3);">(' + verbatims.length + ' responses)</span></div>' +
+        '<div style="display:flex;gap:16px;font-size:12px;">' +
+        '<span style="color:#2ecc71;">&#9679; ' + promoters.length + ' Promoters (' + Math.round(promoters.length/verbatims.length*100) + '%)</span>' +
+        '<span style="color:#f39c12;">&#9679; ' + passives.length + ' Passives (' + Math.round(passives.length/verbatims.length*100) + '%)</span>' +
+        '<span style="color:#e74c3c;">&#9679; ' + detractors.length + ' Detractors (' + Math.round(detractors.length/verbatims.length*100) + '%)</span>' +
+        '</div>' +
+        '<div style="display:flex;gap:12px;margin-top:6px;font-size:12px;">' +
+        '<span style="color:#2ecc71;">&#9679; ' + Math.round(themeAnalysis.sentCounts.positive/responses.length*100) + '% Positive</span>' +
+        '<span style="color:#e74c3c;">&#9679; ' + Math.round(themeAnalysis.sentCounts.negative/responses.length*100) + '% Negative</span>' +
+        '<span style="color:#95a5a6;">&#9679; ' + Math.round(themeAnalysis.sentCounts.neutral/responses.length*100) + '% Neutral</span>' +
+        '</div>';
+    container.appendChild(header);
+
+    var highlights = themeAnalysis.parsed.filter(function(p) { return p.display.length > 20 && p.display.length < 300; })
+        .sort(function(a, b) { return b.themes.length - a.themes.length; }).slice(0, 4);
+
+    if (highlights.length > 0) {
+        var hlSection = document.createElement('div');
+        hlSection.style.cssText = 'margin-bottom:24px;';
+        hlSection.innerHTML = '<div style="font-size:11px;text-transform:uppercase;font-weight:700;color:var(--fg3);margin-bottom:10px;letter-spacing:0.5px;">Key Highlights</div>';
+        var hlGrid = document.createElement('div');
+        hlGrid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px;';
+
+        highlights.forEach(function(hl) {
+            var sentColor = hl.sentiment === 'positive' ? '#2ecc71' : hl.sentiment === 'negative' ? '#e74c3c' : '#95a5a6';
+            var matchVerb = verbatims.find(function(v) { return v.text === hl.raw; });
+            var scoreTag = matchVerb ? '<span style="display:inline-block;background:' + (matchVerb.score >= 9 ? '#2ecc71' : matchVerb.score >= 7 ? '#f39c12' : '#e74c3c') + ';color:#fff;border-radius:50%;width:22px;height:22px;text-align:center;line-height:22px;font-size:10px;font-weight:700;margin-right:8px;">' + matchVerb.score + '</span>' : '';
+            var card = document.createElement('div');
+            card.style.cssText = 'background:var(--bg2);border-radius:8px;padding:16px;border-left:3px solid ' + sentColor + ';';
+            var shortText = hl.display.length > 150 ? hl.display.substring(0, 150) + '...' : hl.display;
+            card.innerHTML = '<div style="font-size:13px;line-height:1.6;color:var(--fg);font-style:italic;">' + scoreTag + '"' + shortText.replace(/</g,'&lt;') + '"</div>' +
+                '<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">' +
+                hl.themes.map(function(t) { return '<span style="font-size:10px;background:var(--bg3);padding:2px 8px;border-radius:10px;color:var(--fg2);">' + t + '</span>'; }).join('') +
+                '</div>';
+            hlGrid.appendChild(card);
+        });
+        hlSection.appendChild(hlGrid);
+        container.appendChild(hlSection);
+    }
+
+    renderThemeBars(container, themeAnalysis);
+
+    var allSection = document.createElement('div');
+    allSection.style.cssText = 'margin-top:20px;';
+    var toggleBtn = document.createElement('button');
+    toggleBtn.className = 'btn btn-small';
+    toggleBtn.textContent = 'Show All Responses (' + verbatims.length + ')';
+    toggleBtn.style.cssText = 'margin-bottom:12px;';
+    var allList = document.createElement('div');
+    allList.style.cssText = 'display:none;max-height:500px;overflow-y:auto;';
+
+    verbatims.forEach(function(verb) {
         var card = document.createElement('div');
         card.className = 'verbatim-card';
-        
         var scoreClass = verb.score >= 9 ? 'promoter' : verb.score >= 7 ? 'passive' : 'detractor';
-        
         card.innerHTML = '<div class="verbatim-score ' + scoreClass + '">' + verb.score + '</div>' +
-            '<div class="verbatim-text">' + verb.text + '</div>';
-        
-        container.appendChild(card);
+            '<div class="verbatim-text">' + (verb.text || '').replace(/</g,'&lt;') + '</div>';
+        allList.appendChild(card);
     });
+
+    toggleBtn.addEventListener('click', function() {
+        if (allList.style.display === 'none') {
+            allList.style.display = 'block';
+            toggleBtn.textContent = 'Hide All Responses';
+        } else {
+            allList.style.display = 'none';
+            toggleBtn.textContent = 'Show All Responses (' + verbatims.length + ')';
+        }
+    });
+    allSection.appendChild(toggleBtn);
+    allSection.appendChild(allList);
+    container.appendChild(allSection);
 }
 
 
