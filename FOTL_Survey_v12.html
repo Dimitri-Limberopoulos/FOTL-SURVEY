@@ -2069,7 +2069,7 @@ function renderBrandAwareness() {
             conversion[brand] = Math.round(((multi + single) / aidedCount) * 100);
         }
     });
-    createHorizontalBarChart('chart-conversion', conversion, '', BRAND_COLORS);
+    createHorizontalBarChart('chart-conversion', conversion, '', BRAND_COLORS, true);
     
     renderOpenText();
 
@@ -2146,6 +2146,26 @@ function createHorizontalBarChart(id, data, title, color, skipPercent) {
     var wrapper = document.getElementById(id).parentElement;
     wrapper.style.height = Math.max(300, labels.length * 28) + 'px';
 
+    // For skipPercent charts, still format as % and filter zeros
+    if (skipPercent) {
+        chartInstances[id].options.plugins.datalabels.formatter = function(v) { return v + '%'; };
+        // Filter out 0% entries
+        var newL = [], newD = [], newC = [];
+        var curC = chartInstances[id].data.datasets[0].backgroundColor;
+        for (var si = 0; si < values.length; si++) {
+            if (values[si] > 0) {
+                newL.push(labels[si]);
+                newD.push(values[si]);
+                newC.push(Array.isArray(curC) ? curC[si] : curC);
+            }
+        }
+        chartInstances[id].data.labels = newL;
+        chartInstances[id].data.datasets[0].data = newD;
+        chartInstances[id].data.datasets[0].backgroundColor = newC;
+        wrapper.style.height = Math.max(300, newL.length * 28) + 'px';
+        chartInstances[id].update();
+    }
+
     // Default to % mode
     if (!skipPercent) {
         var n = getCurrentN();
@@ -2154,6 +2174,26 @@ function createHorizontalBarChart(id, data, title, color, skipPercent) {
             chartInstances[id].data.datasets[0].data = values.map(function(v) { return Math.round((v / n) * 100); });
             chartInstances[id].options.plugins.datalabels.formatter = function(v) { return v + '%'; };
             chartInstances[id].options.scales.x.max = undefined;
+            // Filter out entries that round to 0%
+            var pctData = chartInstances[id].data.datasets[0].data;
+            var newLabels = [], newData = [], newColors = [], newRaw = [];
+            var rawData = chartInstances[id].data.datasets[0]._rawData;
+            var curColors = chartInstances[id].data.datasets[0].backgroundColor;
+            for (var fi = 0; fi < pctData.length; fi++) {
+                if (pctData[fi] > 0) {
+                    newLabels.push(chartInstances[id].data.labels[fi]);
+                    newData.push(pctData[fi]);
+                    newColors.push(Array.isArray(curColors) ? curColors[fi] : curColors);
+                    newRaw.push(rawData[fi]);
+                }
+            }
+            chartInstances[id].data.labels = newLabels;
+            chartInstances[id].data.datasets[0].data = newData;
+            chartInstances[id].data.datasets[0].backgroundColor = newColors;
+            chartInstances[id].data.datasets[0]._rawData = newRaw;
+            // Re-size wrapper
+            var w = document.getElementById(id).parentElement;
+            w.style.height = Math.max(300, newLabels.length * 28) + 'px';
             chartInstances[id].update();
         }
     }
