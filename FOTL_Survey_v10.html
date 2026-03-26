@@ -809,7 +809,7 @@
                 <div>
                     <label>Select Category:</label>
                     <div class="category-chips">
-                        <div class="chip active" data-category="basics">Basics Buyers (n=1,340)</div>
+                        <div class="chip" data-category="basics">Basics Buyers (n=1,340)</div>
                         <div class="chip" data-category="intimates">Intimates Buyers (n=635)</div>
                     </div>
                 </div>
@@ -1659,8 +1659,8 @@ function renderSection(sectionId) {
     sections.forEach(function(s) { s.classList.remove('active'); });
     document.getElementById('section-' + sectionId).classList.add('active');
 
-    // Check if a category is selected (except for executive summary)
-    if (sectionId !== 0 && !currentCategory) {
+    // Check if a category is selected (sections 1-4 need it, section 0 handles its own null check)
+    if (sectionId > 0 && !currentCategory) {
         var container = document.getElementById('section-' + sectionId);
         container.innerHTML = '<div style="padding: 40px; text-align: center; color: var(--fg3);"><p>Please select a category (Basics or Intimates) from the top navigation to view data.</p></div>';
         return;
@@ -1688,6 +1688,12 @@ function renderSection(sectionId) {
 function renderExecutiveSummary() {
     var methodology = "This survey was fielded in February 2026 via a U.S. census-balanced online panel of 1,400 adults aged 18-79. The sample is naturally representative by age, gender, income, and ethnicity — no oversampling or weighting was required. Respondents qualified by having purchased athleisure clothing in the last 12 months. The qualification rate was approximately ~30%.";
     document.getElementById('methodology-text').innerHTML = methodology;
+
+    if (!currentCategory) {
+        var ul = document.getElementById('key-findings-list');
+        ul.innerHTML = '<li style="color: var(--fg3);">Please select a category above to view key findings.</li>';
+        return;
+    }
 
     var findings = [];
     if (currentCategory === 'basics') {
@@ -1837,7 +1843,14 @@ function createHorizontalBarChart(id, data, title, color) {
     var sorted = sortByValue(data);
     var labels = sorted.map(function(p) { return p[0]; });
     var values = sorted.map(function(p) { return p[1]; });
-    var colors = Array.isArray(color) ? color : labels.map(function() { return color; });
+    var colors;
+    if (typeof color === 'object' && !Array.isArray(color)) {
+        colors = labels.map(function(l) { return color[l] || '#1abc9c'; });
+    } else if (Array.isArray(color)) {
+        colors = color;
+    } else {
+        colors = labels.map(function() { return color; });
+    }
 
     var ctx = document.getElementById(id).getContext('2d');
     chartInstances[id] = new Chart(ctx, {
