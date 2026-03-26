@@ -2244,7 +2244,8 @@ function createHorizontalBarChart(id, data, title, color, skipPercent) {
         colors = labels.map(function() { return color; });
     }
 
-    var ctx = document.getElementById(id).getContext('2d');
+    var _el = document.getElementById(id); if (!_el) return;
+    var ctx = _el.getContext('2d');
     chartInstances[id] = new Chart(ctx, {
         type: 'bar',
         data: {
@@ -2363,7 +2364,8 @@ function createStackedHorizontalChart(id, data, title, colors) {
         });
     });
 
-    var ctx = document.getElementById(id).getContext('2d');
+    var _el = document.getElementById(id); if (!_el) return;
+    var ctx = _el.getContext('2d');
     chartInstances[id] = new Chart(ctx, {
         type: 'bar',
         data: {
@@ -2392,8 +2394,10 @@ function createDoughnutChart(id, data, title, colors) {
     var sorted = sortByValue(data);
     var labels = sorted.map(function(p) { return p[0]; });
     var values = sorted.map(function(p) { return p[1]; });
-    
-    var ctx = document.getElementById(id).getContext('2d');
+
+    var el = document.getElementById(id);
+    if (!el) return;
+    var ctx = el.getContext('2d');
     chartInstances[id] = new Chart(ctx, {
         type: 'doughnut',
         data: {
@@ -2457,7 +2461,8 @@ function createFunnelChart(funnel) {
     var wrapper = document.getElementById('chart-funnel').parentElement;
     wrapper.style.height = Math.max(400, brands.length * 28) + 'px';
 
-    var ctx = document.getElementById('chart-funnel').getContext('2d');
+    var _funnelEl = document.getElementById('chart-funnel'); if (!_funnelEl) return;
+    var ctx = _funnelEl.getContext('2d');
     chartInstances['chart-funnel'] = new Chart(ctx, {
         type: 'bar',
         data: { labels: brands, datasets: datasets },
