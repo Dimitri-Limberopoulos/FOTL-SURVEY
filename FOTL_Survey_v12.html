@@ -2288,36 +2288,9 @@ function createHorizontalBarChart(id, data, title, color, skipPercent) {
         chartInstances[id].update();
     }
 
-    // Default to % mode
+    // Store raw data for % toggle and filter zero entries
     if (!skipPercent) {
-        var n = getCurrentN();
-        if (n && n > 0) {
-            chartInstances[id].data.datasets[0]._rawData = values.slice();
-            chartInstances[id].data.datasets[0].data = values.map(function(v) { return Math.round((v / n) * 100); });
-            chartInstances[id].options.plugins.datalabels.formatter = function(v) { return v + '%'; };
-            chartInstances[id].options.scales.x.max = undefined;
-            // Filter out entries that round to 0%
-            var pctData = chartInstances[id].data.datasets[0].data;
-            var newLabels = [], newData = [], newColors = [], newRaw = [];
-            var rawData = chartInstances[id].data.datasets[0]._rawData;
-            var curColors = chartInstances[id].data.datasets[0].backgroundColor;
-            for (var fi = 0; fi < pctData.length; fi++) {
-                if (pctData[fi] > 0) {
-                    newLabels.push(chartInstances[id].data.labels[fi]);
-                    newData.push(pctData[fi]);
-                    newColors.push(Array.isArray(curColors) ? curColors[fi] : curColors);
-                    newRaw.push(rawData[fi]);
-                }
-            }
-            chartInstances[id].data.labels = newLabels;
-            chartInstances[id].data.datasets[0].data = newData;
-            chartInstances[id].data.datasets[0].backgroundColor = newColors;
-            chartInstances[id].data.datasets[0]._rawData = newRaw;
-            // Re-size wrapper
-            var w = document.getElementById(id).parentElement;
-            w.style.height = Math.max(300, newLabels.length * 28) + 'px';
-            chartInstances[id].update();
-        }
+        chartInstances[id].data.datasets[0]._rawData = values.slice();
     }
 }
 
@@ -2369,6 +2342,8 @@ function createOrderedBarChart(id, data, title, color, orderKeys) {
             }
         }
     });
+    // Store raw data for % toggle
+    chartInstances[id].data.datasets[0]._rawData = values.slice();
 }
 
 function createStackedHorizontalChart(id, data, title, colors) {
