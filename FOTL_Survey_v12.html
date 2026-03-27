@@ -3923,22 +3923,42 @@ function createMatrixStackedChart(id, matrixData, responseOrder, colorMap) {
     var ctx = _el.getContext('2d');
 
     var itemNames = Object.keys(matrixData);
+
+    // Largest-remainder rounding: ensures segments sum to exactly 100%
+    function roundToSum100(rawCounts, total) {
+        if (total === 0) return rawCounts.map(function() { return 0; });
+        var exactPcts = rawCounts.map(function(v) { return (v / total) * 100; });
+        var floored = exactPcts.map(function(v) { return Math.floor(v); });
+        var remainders = exactPcts.map(function(v, i) { return v - floored[i]; });
+        var deficit = 100 - floored.reduce(function(a, b) { return a + b; }, 0);
+        // Distribute deficit to items with largest remainders
+        var indices = remainders.map(function(_, i) { return i; });
+        indices.sort(function(a, b) { return remainders[b] - remainders[a]; });
+        for (var d = 0; d < deficit; d++) {
+            floored[indices[d]]++;
+        }
+        return floored;
+    }
+
     // Build datasets: one per response option
     var datasets = [];
+    // Pre-compute per-item totals and rounded percentages
+    var itemTotals = itemNames.map(function(item) {
+        var t = 0; for (var r in matrixData[item]) t += matrixData[item][r]; return t;
+    });
+    // For each item, compute all response counts then round together
+    var allPctByItem = itemNames.map(function(item, idx) {
+        var counts = responseOrder.map(function(resp) { return matrixData[item][resp] || 0; });
+        return roundToSum100(counts, itemTotals[idx]);
+    });
+
     responseOrder.forEach(function(resp, ri) {
-        var data = itemNames.map(function(item) {
-            return matrixData[item][resp] || 0;
-        });
-        // Convert to % of respondents per item
-        var pctData = itemNames.map(function(item, idx) {
-            var total = 0;
-            for (var r in matrixData[item]) total += matrixData[item][r];
-            return total > 0 ? Math.round(data[idx] / total * 100) : 0;
-        });
+        var rawData = itemNames.map(function(item) { return matrixData[item][resp] || 0; });
+        var pctData = itemNames.map(function(item, idx) { return allPctByItem[idx][ri]; });
         datasets.push({
             label: resp,
             data: pctData,
-            _rawData: data,
+            _rawData: rawData,
             backgroundColor: colorMap[ri % colorMap.length],
             borderRadius: 2
         });
